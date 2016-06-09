@@ -1,0 +1,132 @@
+ui_print("#############################################");
+ui_print("#        ParrotMod v2.0 - Universal         #");
+ui_print("#   By: @parrotgeek1 (www.parrotgeek.com)   #");
+#***CHANGE_ME***: change device ID below to match your device
+ui_print("#           N7105 kang by miji22            #");
+ui_print("#############################################");
+ui_print("");
+
+ui_print("Checking requirements...");
+#check ProductID
+#***CHANGE_ME***: change device ID below to match your device
+assert(getprop("ro.product.device") == "t0lte" || getprop("ro.build.product") == "t0lte" || getprop("ro.product.device") == "t0ltexx" || getprop("ro.build.product") == "t0ltexx" || getprop("ro.product.device") == "GT-N7105" || getprop("ro.build.product") == "GT-N7105" || getprop("ro.product.device") == "t0ltedv" || getprop("ro.build.product") == "t0ltedv" || getprop("ro.product.device") == "GT-N7105T" || getprop("ro.build.product") == "GT-N7105T" || getprop("ro.product.device") == "t0lteatt" || getprop("ro.build.product") == "t0lteatt" || getprop("ro.product.device") == "SGH-I317" || getprop("ro.build.product") == "SGH-I317" || getprop("ro.product.device") == "t0ltetmo" || getprop("ro.build.product") == "t0ltetmo" || getprop("ro.product.device") == "SGH-T889" || getprop("ro.build.product") == "SGH-T889" || getprop("ro.product.device") == "t0ltecan" || getprop("ro.build.product") == "t0ltecan" || getprop("ro.product.device") == "t0ltevl" || getprop("ro.build.product") == "t0ltevl" || getprop("ro.product.device") == "SGH-I317M" || getprop("ro.build.product") == "SGH-I317M" || abort("This package is for device: t0lte,t0ltexx,GT-N7105,t0ltedv,GT-N7105T,t0lteatt,SGH-I317,t0ltetmo,SGH-T889,t0ltecan,t0ltevl,SGH-I317M; this device is " + getprop("ro.product.device") + "."););
+ui_print("Target: samsung/t0ltexx/t0lte");
+
+#validate we have BusyBox
+package_extract_file("checkbb.sh", "/tmp/checkbb.sh");
+set_perm(0, 0, 0777, "/tmp/checkbb.sh");
+
+run_program("/tmp/checkbb.sh");
+if file_getprop("/tmp/bb.prop","bb.exists") == "0" then
+	delete("/tmp/checkbb.sh");
+	delete("/tmp/bb.prop");
+	abort("ERROR: ParrotMod requires a recovery that has BusyBox built in. (All versions of TWRP do. CWM does not.)");
+endif;
+
+delete("/tmp/checkbb.sh");
+delete("/tmp/bb.prop");
+
+#mount system
+run_program("/sbin/busybox", "mount", "/system");
+
+#ckeck SDK version
+assert(!less_than_int(file_getprop("/system/build.prop","ro.build.version.sdk"),17) && less_than_int(file_getprop("/system/build.prop","ro.build.version.sdk"),24) || abort ("ERROR: ParrotMod currently only supports Android 4.2-6.x, refusing to install."));
+
+ui_print("Freeing space...");
+
+#purge some stuff
+#here is where you should delete() some bloatware apks like OTA updater, that would cause system partition to run out of space
+if file_getprop("/system/build.prop","ro.build.type") == "user" && file_getprop("/system/build.prop","ro.build.tags") == "release-keys" && is_substring("corp.google.com",file_getprop("/system/build.prop","ro.build.host")) then
+	run_program("/sbin/busybox", "find","/system/app/XT9IME","-depth","-xdev","-follow","-delete");
+	delete("/system/app/XT9IME.apk");
+	delete("/system/lib/libjni_xt9input.so");
+	delete("/system/su.d/01magic");
+	delete("/system/su.d/02parrotmodstock.sh");
+endif;
+
+run_program("/sbin/busybox", "mount", "/data");
+run_program("/sbin/busybox", "mount", "/cache");
+
+delete_recursive("/system/etc/parrotmod");
+delete_recursive("/system/etc/parrotmodstock");
+delete("/data/lastpmver.txt");
+delete("/data/lastpmver_univ.txt");
+delete("/data/system/parrotmod_last_version");
+
+ui_print("Installing...");
+
+package_extract_dir("system", "/system");
+
+#Bluetooth 4.0 section
+package_extract_file("exist.sh", "/tmp/exist.sh");
+set_perm(0, 0, 0777, "/tmp/exist.sh");
+
+run_program("/tmp/exist.sh", "/system/etc/permissions/android.hardware.bluetooth_le.xml");
+if sha1_check(package_extract_file("bt40/"+file_getprop("/system/build.prop","ro.build.version.sdk")+"/sentinel")) != "" && file_getprop("/tmp/exist.prop","file.exists") == "0" then
+	package_extract_dir("bt40/system", "/system");
+	package_extract_dir("bt40/"+file_getprop("/system/build.prop","ro.build.version.sdk")+"/system", "/system");
+endif;
+
+#copy SDK appropriate optimized libc
+if sha1_check(package_extract_file("libc/"+file_getprop("/system/build.prop","ro.build.version.sdk")+"/sentinel")) != "" then
+	package_extract_dir("libc/system", "/system");
+	package_extract_dir("libc/"+file_getprop("/system/build.prop","ro.build.version.sdk")+"/system", "/system");
+endif;
+
+#copy SDK appropriate optimized libart
+run_program("/tmp/exist.sh", "/system/xposed.prop");
+if sha1_check(package_extract_file("libart/"+file_getprop("/system/build.prop","ro.build.version.sdk")+"/sentinel")) != "" then
+	if file_getprop("/tmp/exist.prop","file.exists") == "1" then
+		package_extract_file("libart/system/lib/libart.so", "/system/lib/libart.so.orig");
+		ui_print("WARNING: Some ART runtime optimizations are not available when Xposed is installed! Please uninstall it to enable them.");
+	else
+		package_extract_file("libart/system/lib/libart.so", "/system/lib/libart.so");
+	endif;
+endif;
+
+#cleanup begins
+delete("/tmp/exist.sh");
+delete("/tmp/exist.prop");
+
+#set perms
+set_perm_recursive(0, 0, 0700, 0700, "/system/su.d");
+set_perm_recursive(0, 0, 0755, 0755, "/system/etc/parrotmod");
+set_perm_recursive(0, 0, 0755, 0755, "/system/lib/hw");
+set_perm_recursive(0, 0, 0755, 0755, "/system/addon.d");
+
+#removed miracast patch for N7105
+#if !less_than_int(file_getprop("/system/build.prop","ro.build.version.sdk"),17) then
+#	package_extract_file("miracast_patch.sh", "/tmp/miracast_patch.sh");
+#	set_perm(0, 0, 0777, "/tmp/miracast_patch.sh");
+#	run_program("/tmp/miracast_patch.sh", "");
+#	delete("/tmp/miracast_patch.sh");
+#endif;
+
+run_program("/sbin/busybox", "chcon", "-R", "u:object_r:system_file:s0", "/system/etc/parrotmod");
+run_program("/sbin/busybox", "chcon", "-R", "u:object_r:system_file:s0", "/system/su.d");
+
+#populate build.prop
+run_program("/system/etc/parrotmod/bprop.sh", "");
+
+#fstrim section
+package_extract_file("emmcmodel.sh", "/tmp/emmcmodel.sh");
+set_perm(0, 0, 0777, "/tmp/emmcmodel.sh");
+
+run_program("/tmp/emmcmodel.sh");
+delete("/tmp/emmcmodel.sh");
+
+ui_print("Optimizing storage (fstrim)...");
+if file_getprop("/tmp/emmc.prop","emmc.manfid") == "0x000070" then
+	ui_print("NOTICE: Automatic TRIM at boot is disabled because it would be too slow on your device's Kingston flash memory chip. It's a good idea to use a trimmer app or keep your device powered-on overnight.");
+	ui_print("Trimming data and cache partitions now. This could take up to 10 minutes on your device's Kingston eMMC chip.");
+	run_program("/sbin/busybox", "fstrim", "-v", "/data");
+	run_program("/sbin/busybox", "fstrim", "-v", "/cache");
+endif;
+
+delete("/tmp/emmc.prop");
+ui_print("");
+
+run_program("/sbin/busybox", "fstrim", "-v", "/system");
+run_program("/sbin/busybox", "umount", "/system");
+
+ui_print("Enjoy ParrotMod!");
