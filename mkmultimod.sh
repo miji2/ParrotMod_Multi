@@ -1,7 +1,5 @@
 #!/bin/bash
-#branch=$(git rev-parse --abbrev-ref HEAD)
-branch="Universal"
-echo "$branch"   # your processing here
+branch=$(git rev-parse --abbrev-ref HEAD)
 mkdir -p "ParrotMod/$branch"
 mv ParrotMod_*_${branch}_2*.zip $branch/ 2>/dev/null
 #show Windows files, if any
